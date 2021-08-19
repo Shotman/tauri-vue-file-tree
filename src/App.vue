@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div @click="resetSelection" id="container">
     <div id="floatingInput"><input v-on:keyup.enter="sendValue" v-on:keyup.escape="hideInput" v-model="inputValue" style="width:33%;margin-left:33%;" type="text" /></div>
     <button @click="openFolder">Open Folder</button>
     <button @click="showInput('leaf')">📜</button><button @click="showInput('dir')">📂</button>
@@ -169,6 +169,10 @@ export default {
         }
       })
     },
+    resetSelection () {
+      document.getElementById(this.selectedNode.id).classList.toggle('active')
+      this.selectedNode = null
+    },
     sortTree (node = null) {
       if (node === null) node = this.data
       node.children.sort((a, b) => sortAlphabetically(a, b))
@@ -284,6 +288,9 @@ export default {
   .vtl-disabled {
     background-color: #d0cfcf;
   }
+}
+#container{
+  height: 100%;
 }
 </style>
 
