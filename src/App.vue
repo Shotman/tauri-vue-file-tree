@@ -18,6 +18,8 @@
           {{ slotProps.model.name }}
         </span>
       </template>
+      <span style="display:none" slot="addTreeNodeIcon"></span>
+      <span style="display:none" slot="addLeafNodeIcon"></span>
     </vue-tree-list>
   </div>
 </template>
@@ -25,7 +27,7 @@
 <script>
 import { VueTreeList, Tree, TreeNode } from 'vue-tree-list'
 import { readDir, createDir, writeFile, removeDir, removeFile, renameFile } from '@tauri-apps/api/fs'
-import { videoDir } from '@tauri-apps/api/path'
+import { videoDir, resolve as pathResolve, join as pathJoin } from '@tauri-apps/api/path'
 import { open } from '@tauri-apps/api/dialog'
 
 const getPartialNodePath = (node, accum, override) => {
@@ -55,14 +57,20 @@ const slugify = (text) =>
     .trim()
     .replace(/\s+/g, '-')
     .replace(/[^\w-]+/g, '')
-    .replace(/--+/g, '-')
+    .replace(/--+/g, '-') + Date.now().toString()
+
+const getNodeObj = (node) => {
+  return node.parent.children.filter(function (el) {
+    return el.name === node.name
+  })[0]
+}
 export default {
   components: {
     VueTreeList
   },
   async created () {
     this.rootDir = await videoDir().then(result => result)
-    const struct = await readDir(this.rootDir, { recursive: true }).then(result => result)
+    const struct = await readDir(this.rootDir, { recursive: false }).then(result => result)
     this.data = new Tree([])
     this.generateNewTree(struct)
     this.loading = false
@@ -77,10 +85,31 @@ export default {
       inputValue: '',
       nodeOldName: undefined,
       renamingNode: null,
+      selectedNode: null,
       click: null
     }
   },
   methods: {
+    async updateNode (node) {
+      let path = getFullNodePath(node)
+      const nodeObj = getNodeObj(node)
+      path = await pathResolve(this.rootDir, path).then(result => result)
+      const content = await readDir(path, { recursive: false }).then(result => result)
+      if (!nodeObj.children) nodeObj.children = []
+      content.forEach(item => {
+        const matches = nodeObj.children.filter((el) => {
+          return el.name === item.name
+        })
+        if (matches.length === 0) {
+          if (item.children) {
+            this.addDir(item, nodeObj)
+          } else {
+            this.addLeaf(item, nodeObj)
+          }
+        }
+      })
+      return node
+    },
     onDel (node) {
       const path = getFullNodePath(node)
       if (node.isLeaf) {
@@ -122,10 +151,21 @@ export default {
       this.handleClick(params).then((result) => {
         const { type, params } = result
         if (type === 'single') {
-          console.log(type, params)
+          if (this.selectedNode !== null) {
+            const elem = document.getElementById(this.selectedNode.id)
+            if (elem === null) {
+              this.selectedNode = null
+            } else {
+              elem.classList.toggle('active')
+            }
+          }
+          this.selectedNode = params
+          document.getElementById(params.id).classList.toggle('active')
         }
         if (type === 'double') {
-          params.toggle()
+          if (!params.isLeaf) {
+            this.updateNode(params).then((node) => node.toggle())
+          }
         }
       })
     },
@@ -137,7 +177,7 @@ export default {
       this.loading = true
       open({ directory: true }).then(result => {
         this.rootDir = result
-        readDir(result, { recursive: true }).then(result => {
+        readDir(result, { recursive: false }).then(result => {
           this.data = new Tree([])
           this.generateNewTree(result)
           this.sortTree()
@@ -163,11 +203,20 @@ export default {
       document.getElementById('floatingInput').style.top = '0px'
       document.querySelector('#floatingInput > input').focus()
     },
-    addRootDir (value) {
-      console.log('~ ROOT DIR: ', this.rootDir + value)
-      // const absPath = this.rootDir + value
-      createDir(this.rootDir + value).then((result) => {
-        this.addDir({ name: value })
+    async addRootDir (value) {
+      let path = this.rootDir + value
+      let parent = this.selectedNode !== null ? getNodeObj(this.selectedNode) : null
+      if (parent.isLeaf) {
+        parent = parent.parent
+      }
+      if (parent !== null) {
+        path = await pathJoin(this.rootDir, getFullNodePath(parent)).then(result => result) + '\\' + value
+      }
+      createDir(path).then((result) => {
+        this.addDir({ name: value }, parent)
+        if (parent !== null) {
+          this.selectedNode.toggle()
+        }
       })
     },
     addDir (item, parent = null) {
@@ -182,10 +231,20 @@ export default {
       this.sortTree()
       return node
     },
-    addRootLeaf (value) {
-      console.log('~ ROOT LEAF: ', this.rootDir + value)
-      writeFile({ path: this.rootDir + value, contents: '' }).then((result) => {
-        this.addLeaf({ name: value })
+    async addRootLeaf (value) {
+      let path = this.rootDir + value
+      let parent = this.selectedNode !== null ? getNodeObj(this.selectedNode) : null
+      if (parent.isLeaf) {
+        parent = parent.parent
+      }
+      if (parent !== null) {
+        path = await pathJoin(this.rootDir, getFullNodePath(parent)).then(result => result) + '\\' + value
+      }
+      writeFile({ path: path, contents: '' }).then((result) => {
+        this.addLeaf({ name: value }, parent)
+        if (parent !== null) {
+          this.selectedNode.toggle()
+        }
       })
     },
     addLeaf (item, parent = null) {
@@ -203,6 +262,7 @@ export default {
       folderStruct.forEach(item => {
         if (item.children) {
           const node = this.addDir(item, parent)
+          node.children = []
           this.generateNewTree(item.children, node)
         } else {
           this.addLeaf(item, parent)
@@ -251,5 +311,12 @@ export default {
   .muted {
     color: gray;
     font-size: 80%;
+  }
+
+</style>
+
+<style>
+.vtl-node.active{
+    border: 1px solid red;
   }
 </style>
