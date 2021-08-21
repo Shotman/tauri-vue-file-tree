@@ -155,9 +155,6 @@ export default {
         })
       }
     },
-    onAddNode (params) {
-      console.log(params)
-    },
     handleClick (params) {
       return new Promise((resolve, reject) => {
         if (this.click) {
