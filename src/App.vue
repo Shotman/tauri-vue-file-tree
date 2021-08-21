@@ -10,8 +10,8 @@
       @click="onClick"
       @change-name="onChangeName"
       @delete-node="onDel"
-      @add-node="onAddNode"
       @dragstart="dragCallback"
+      @drop="drop"
       :model="data"
       v-bind:default-expanded="false"
     >
@@ -29,12 +29,12 @@
 <script>
 import { VueTreeList, Tree, TreeNode } from 'vue-tree-list'
 import { readDir, createDir, writeFile, removeDir, removeFile, renameFile } from '@tauri-apps/api/fs'
-import { videoDir, resolve as pathResolve, join as pathJoin } from '@tauri-apps/api/path'
+import { videoDir, resolve as pathResolve, join as pathJoin, basename as pathBasename, sep as DS } from '@tauri-apps/api/path'
 import { open } from '@tauri-apps/api/dialog'
 
 const getPartialNodePath = (node, accum, override) => {
   if (node.parent == null) {
-    return accum.reverse().join('/')
+    return accum.reverse().join(DS)
   } else {
     accum.push(override == null ? node.name : override)
     return getPartialNodePath(node.parent, accum)
@@ -62,7 +62,6 @@ const slugify = (text) =>
     .replace(/--+/g, '-') + Date.now().toString()
 
 const getNodeObj = (node) => {
-  console.log(node)
   if (node.parent !== null) {
     return node.parent.children.filter(function (el) {
       return el.name === node.name
@@ -102,6 +101,14 @@ export default {
   methods: {
     dragCallback (event) {
       console.log(event)
+    },
+    async drop (event) {
+      const originPath = getFullNodePath(event.src)
+      const nodeFile = await pathBasename(getFullNodePath(event.node)).then(result => result)
+      const dest = getFullNodePath(event.target)
+      const origin = await pathJoin(this.rootDir.trim(), originPath.trim(), nodeFile.trim()).then(result => result)
+      const target = this.rootDir + dest + DS + nodeFile
+      renameFile(origin, target)
     },
     async clickUpdateNode () {
       await this.updateNode(null, true)
@@ -237,7 +244,7 @@ export default {
         parent = parent.parent
       }
       if (parent !== null) {
-        path = await pathJoin(this.rootDir, getFullNodePath(parent)).then(result => result) + '\\' + value
+        path = await pathJoin(this.rootDir, getFullNodePath(parent)).then(result => result) + DS + value
       }
       createDir(path).then((result) => {
         this.addDir({ name: value }, parent)
