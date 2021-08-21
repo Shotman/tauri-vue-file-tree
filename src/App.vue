@@ -10,8 +10,8 @@
       @click="onClick"
       @change-name="onChangeName"
       @delete-node="onDel"
-      @dragstart="dragCallback"
       @drop="drop"
+      @drop-before="dropBefore"
       :model="data"
       v-bind:default-expanded="false"
     >
@@ -99,16 +99,19 @@ export default {
     }
   },
   methods: {
-    dragCallback (event) {
-      console.log(event)
-    },
     async drop (event) {
       const originPath = getFullNodePath(event.src)
       const nodeFile = await pathBasename(getFullNodePath(event.node)).then(result => result)
       const dest = getFullNodePath(event.target)
       const origin = await pathJoin(this.rootDir.trim(), originPath.trim(), nodeFile.trim()).then(result => result)
       const target = this.rootDir + dest + DS + nodeFile
+      console.log(origin, target)
       renameFile(origin, target)
+    },
+    dropBefore (event) {
+      const destPath = this.rootDir + getFullNodePath(event.node)
+      const originPath = this.rootDir + getFullNodePath(event.target) + DS + event.node.name
+      renameFile(originPath, destPath)
     },
     async clickUpdateNode () {
       await this.updateNode(null, true)
