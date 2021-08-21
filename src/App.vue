@@ -2,14 +2,16 @@
   <div @click="resetSelection" id="container">
     <div id="floatingInput"><input v-on:keyup.enter="sendValue" v-on:keyup.escape="hideInput" v-model="inputValue" style="width:33%;margin-left:33%;" type="text" /></div>
     <button @click="openFolder">Open Folder</button>
-    <button @click="showInput('leaf')">📜</button><button @click="showInput('dir')">📂</button>
+    <button @click="showInput('leaf')">📜</button><button @click="showInput('dir')">📂</button><button @click="clickUpdateNode">🔄</button>
     <div v-if="loading">Loading ...</div>
     <vue-tree-list
+      ref='tree'
       v-else
       @click="onClick"
       @change-name="onChangeName"
       @delete-node="onDel"
       @add-node="onAddNode"
+      @dragstart="dragCallback"
       :model="data"
       v-bind:default-expanded="false"
     >
@@ -60,10 +62,18 @@ const slugify = (text) =>
     .replace(/--+/g, '-') + Date.now().toString()
 
 const getNodeObj = (node) => {
-  return node.parent.children.filter(function (el) {
-    return el.name === node.name
-  })[0]
+  console.log(node)
+  if (node.parent !== null) {
+    return node.parent.children.filter(function (el) {
+      return el.name === node.name
+    })[0]
+  }
+  if (node.isLeaf) {
+    return node.parent
+  }
+  return node
 }
+
 export default {
   components: {
     VueTreeList
@@ -90,7 +100,20 @@ export default {
     }
   },
   methods: {
-    async updateNode (node) {
+    dragCallback (event) {
+      console.log(event)
+    },
+    async clickUpdateNode () {
+      await this.updateNode(null, true)
+    },
+    async updateNode (node = null, deploy = false) {
+      if (node === null) {
+        if (this.selectedNode === null) {
+          node = this.data
+        } else {
+          node = this.selectedNode
+        }
+      }
       let path = getFullNodePath(node)
       const nodeObj = getNodeObj(node)
       path = await pathResolve(this.rootDir, path).then(result => result)
@@ -169,9 +192,12 @@ export default {
         }
       })
     },
-    resetSelection () {
-      document.getElementById(this.selectedNode.id).classList.toggle('active')
-      this.selectedNode = null
+    resetSelection (event) {
+      const shouldReset = event.target.nodeName !== 'BUTTON'
+      if (shouldReset) {
+        document.getElementById(this.selectedNode.id).classList.toggle('active')
+        this.selectedNode = null
+      }
     },
     sortTree (node = null) {
       if (node === null) node = this.data
@@ -226,6 +252,7 @@ export default {
     addDir (item, parent = null) {
       var nodeStruct = {
         name: item.name,
+        dragDisabled: false,
         isLeaf: false,
         id: slugify(item.name)
       }
@@ -238,7 +265,7 @@ export default {
     async addRootLeaf (value) {
       let path = this.rootDir + value
       let parent = this.selectedNode !== null ? getNodeObj(this.selectedNode) : null
-      if (parent.isLeaf) {
+      if (parent !== null && parent.isLeaf) {
         parent = parent.parent
       }
       if (parent !== null) {
@@ -255,6 +282,7 @@ export default {
       var nodeStruct = {
         name: item.name,
         isLeaf: true,
+        dragDisabled: false,
         id: slugify(item.name)
       }
       var node = new TreeNode(nodeStruct)
