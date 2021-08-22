@@ -22,3 +22,8 @@ yarn lint
 
 ### Customize configuration
 See [Configuration Reference](https://cli.vuejs.org/config/).
+
+
+### DEMO GIF (Alpha stage)
+
+![DEMO GIF](./docs/demo.gif)

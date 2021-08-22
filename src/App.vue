@@ -105,7 +105,6 @@ export default {
       const dest = getFullNodePath(event.target)
       const origin = await pathJoin(this.rootDir.trim(), originPath.trim(), nodeFile.trim()).then(result => result)
       const target = this.rootDir + dest + DS + nodeFile
-      console.log(origin, target)
       renameFile(origin, target)
     },
     dropBefore (event) {
